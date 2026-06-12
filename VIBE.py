@@ -93,9 +93,9 @@ def read_menu_choice() -> str:
 
 def print_section(title: str) -> None:
     """Print a clearly labeled section header."""
-    print("\n" + "=" * 60)
+    print("\n" + "=" * 50)
     print(title)
-    print("=" * 60)
+    print("=" * 50)
 
 
 
