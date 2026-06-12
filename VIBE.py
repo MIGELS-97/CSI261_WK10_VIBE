@@ -1,7 +1,17 @@
 import sys
-import termios
-import tty
 from typing import List
+
+try:
+    import termios
+    import tty
+except ImportError:
+    termios = None  # type: ignore[assignment]
+    tty = None  # type: ignore[assignment]
+
+try:
+    import msvcrt
+except ImportError:
+    msvcrt = None  # type: ignore[assignment]
 
 FILE_NAME = "student_grades.txt"
 
@@ -70,24 +80,43 @@ def clear_screen() -> None:
 
 def read_single_key() -> str:
     """Read a single key press from the terminal, including Escape."""
-    fd = sys.stdin.fileno()
-    old_settings = termios.tcgetattr(fd)
-    try:
-        tty.setraw(fd)
-        key = sys.stdin.read(1)
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-    return key
+    if termios is not None and tty is not None and sys.stdin.isatty():
+        fd = sys.stdin.fileno()
+        tcgetattr = getattr(termios, "tcgetattr")
+        tcsetattr = getattr(termios, "tcsetattr")
+        tty_setraw = getattr(tty, "setraw")
+        old_settings = tcgetattr(fd)
+        try:
+            tty_setraw(fd)
+            key = sys.stdin.read(1)
+        finally:
+            tcsetattr(fd, getattr(termios, "TCSADRAIN", getattr(termios, "TCSAFLUSH", 0)), old_settings)
+        return key
+
+    if msvcrt is not None:
+        get_key = getattr(msvcrt, "getwch", None)
+        if get_key is not None:
+            return get_key()
+        get_key = getattr(msvcrt, "getch", None)
+        if get_key is not None:
+            return get_key().decode("utf-8", errors="ignore")
+
+    return input("Enter your choice: ").strip()
 
 
 
 def read_menu_choice() -> str:
     """Read a menu selection from either a real terminal or a piped input session."""
-    if not sys.stdin.isatty():
-        return input("Enter your choice: ").strip()
-    return read_single_key()
-
-
+    try:
+        if not sys.stdin.isatty():
+            return input("Enter your choice: ").strip()
+        return read_single_key()
+    except EOFError:
+        print("\nNo input received. Exiting program.")
+        return "6"
+    except KeyboardInterrupt:
+        print("\nProgram interrupted. Exiting program.")
+        return "6"
 
 
 
@@ -139,6 +168,8 @@ def add_student(students: List[Student]) -> None:
     if not name:
         print("Name cannot be empty.")
         return
+    if "|" in name or "|" in students:
+        print("Name and ID cannot contain the | sysbol.")
 
     student_id = input("Enter student ID: ").strip()
     if not student_id:
@@ -150,6 +181,11 @@ def add_student(students: List[Student]) -> None:
             test1 = float(input("Enter test 1 score: ").strip())
             test2 = float(input("Enter test 2 score: ").strip())
             test3 = float(input("Enter test 3 score: ").strip())
+
+            if not 0 <= test1 <= 100 or not 0 <= test2 <= 100 or not 0 <= test3 <= 100:
+                print("Scores must be between 0 and 100.")
+                continue
+
             break
         except ValueError:
             print("Please enter numeric scores.")
@@ -212,6 +248,10 @@ def search_student(students: List[Student]) -> None:
         return
 
     name_query = input("Enter a student name to search: ").strip().lower()
+    if not name_query:
+        print("Search name cannot be empty.")
+        return
+    
     matches = [student for student in students if name_query in student.name.lower()]
 
     if not matches:
@@ -234,7 +274,7 @@ def show_menu() -> None:
     print("4. Show class statistics")
     print("5. Save records")
     print("6. Exit")
-    print("\nPress ESC to exit at any time.")
+    print("\nPress ESC at the menu to exit..")
 
 
 
@@ -273,6 +313,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
-
